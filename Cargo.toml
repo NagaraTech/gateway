@@ -1,0 +1,35 @@
+[package]
+name = "gateway"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+#sea-orm = { version = "^0.12.0", features = [ "sqlx-postgres", "runtime-async-std-native-tls", "macros" ,"with-json"] }
+sea-orm = { version = "^0.12.0", features = [ "sqlx-postgres", "runtime-async-std-native-tls", "macros", "mock" ] }
+dotenv = "0.15.0"
+tonic = "0.8"
+prost = "0.11"
+tokio = { version = "1.24", features = ["macros", "rt-multi-thread"] }
+tokio-stream = { version = "0.1", features = ["net"] }
+futures = "0.3"
+clap = { version = "4.1.4", features = ["derive"] }
+tonic-reflection = "0.6.0"
+serde_json = "1.0.116"
+axum = { version = "0.7.5" }
+axum-extra = { version = "0.9", features = ["typed-header"] }
+axum_cors = "0.1.4"
+serde = { version = "1.0.198", features = ["derive"] }
+http = "1.1.0"
+tower-http = { version = "0.5.2", features = ["cors"] }
+
+[build-dependencies]
+tonic-build = "0.8"
+
+
+[[bin]]
+name = "rpc-server"
+path = "src/bin/rpc.rs"
+
+[[bin]]
+name = "restful-server"
+path = "src/bin/restful.rs"
