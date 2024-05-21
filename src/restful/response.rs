@@ -61,10 +61,6 @@ pub struct MessageDetailResponse {
     pub message_id: ::prost::alloc::string::String,
     #[prost(map = "string, int32", tag = "2")]
     pub clock: ::std::collections::HashMap<::prost::alloc::string::String, i32>,
-    #[prost(int32, tag = "3")]
-    pub event_count: i32,
-    #[prost(bool, tag = "4")]
-    pub is_zk: bool,
     #[prost(string, tag = "5")]
     pub from_addr: ::prost::alloc::string::String,
     #[prost(string, tag = "6")]

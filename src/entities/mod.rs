@@ -2,6 +2,7 @@
 
 pub mod prelude;
 
-pub mod clock_message;
-pub mod merge_log;
+pub mod clock_infos;
+pub mod merge_logs;
 pub mod node_info;
+pub mod z_messages;

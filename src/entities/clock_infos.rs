@@ -3,14 +3,17 @@
 use sea_orm::entity::prelude::*;
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq)]
-#[sea_orm(table_name = "node_info")]
+#[sea_orm(table_name = "clock_infos")]
 pub struct Model {
     #[sea_orm(primary_key)]
     pub id: i32,
-    #[sea_orm(column_type = "Text")]
+    pub clock: String,
     pub node_id: String,
-    pub neighbor_nodes: Vec<String>,
-    pub is_alive: bool,
+    pub message_id: String,
+    #[sea_orm(column_type = "Text")]
+    pub raw_message: String,
+    pub event_count: i32,
+    pub create_at: Option<DateTime>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

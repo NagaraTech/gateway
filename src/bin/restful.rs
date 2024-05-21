@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use gateway::db::get_conn;
-use gateway::entities::node_info;
+// use gateway::entities::node_info;
 use gateway::restful::response::{MessageDetailResponse, MessageInfo, Node, NodeDetailResponse, NodesOverviewResponse};
 use gateway::entities::{prelude::*, *};
 use axum::{
@@ -14,12 +14,18 @@ use axum::extract::Path;
 use http::HeaderValue;
 use tower_http::cors::{AllowHeaders, AllowMethods, AllowOrigin, Any, CorsLayer};
 use serde_json::Value;
-use sea_orm::*;
-
+use sea_orm::{Database, DatabaseConnection, DbErr, EntityTrait, QuerySelect, TryFromU64};
+use sea_orm::entity::*;
+use sea_orm::query::*;
+use gateway::nodes::node::P2PNode;
+use gateway::entities::{z_messages, merge_logs, clock_infos, node_info};
+use tokio::task;
+use tokio::time::{self, Duration};
+use std::sync::{Arc, Mutex};
 async fn get_nodes_info() -> Result<Json<NodesOverviewResponse>, StatusCode> {
     let conn = get_conn().await;
     let nodes: Vec<node_info::Model> = NodeInfo::find().all(conn).await.expect("REASON");
-    let message_count = ClockMessage::find().count(conn).await.expect("REASON");
+    let message_count = z_messages::Entity::find().count(conn).await.expect("REASON");
     let mut nodes_response: Vec<Node> = vec![];
     for n in &nodes {
         nodes_response.push(Node {
@@ -36,9 +42,9 @@ async fn get_nodes_info() -> Result<Json<NodesOverviewResponse>, StatusCode> {
     Ok(Json(res))
 }
 
-async fn get_node_by_id(Path(id): Path<String>) -> Result<Json<NodeDetailResponse>, StatusCode>{
+async fn get_node_by_id(Path(id): Path<String>) -> Result<Json<NodeDetailResponse>, StatusCode> {
     let mut message_list: Vec<MessageInfo> = vec![];
-
+    let id: i32 = id.parse().expect("Failed to convert string to i32");
     let conn = get_conn().await;
 
     let node: node_info::Model;
@@ -50,20 +56,20 @@ async fn get_node_by_id(Path(id): Path<String>) -> Result<Json<NodeDetailRespons
         None => todo!()
     }
 
-    let messages_query: Vec<clock_message::Model> = ClockMessage::find().filter(clock_message::Column::NodeId.eq(&node.node_id)).all(conn).await.expect("REASON");
+    let messages_query: Vec<z_messages::Model> = z_messages::Entity::find().filter(z_messages::Column::NodeId.eq(&node.node_id)).all(conn).await.expect("REASON");
     let mut max_clock = 0;
     for m in &messages_query {
-        let clock: HashMap<String, Value> = m.clock.as_object().unwrap().iter().map(|(k, v)| (k.clone(), v.clone())).collect();
-        // println!("{}", clock.values().next().unwrap());
-        let str = clock.values().next().unwrap().to_string();
-        let num: i32 = str.parse().unwrap();
-        if num > max_clock {
-            max_clock = num
-        }
+        // let clock: HashMap<String, Value> = m.clock.as_object().unwrap().iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+        // // println!("{}", clock.values().next().unwrap());
+        // let str = clock.values().next().unwrap().to_string();
+        // let num: i32 = str.parse().unwrap();
+        // if num > max_clock {
+        //     max_clock = num
+        // }
         message_list.push(MessageInfo {
             message_id: m.message_id.clone(),
-            from_addr: m.from_addr.clone().unwrap_or_default(),
-            to_addr: m.to_addr.clone().unwrap_or_default(),
+            from_addr: m.from.clone(),
+            to_addr: m.to.clone(),
         })
     }
     let mut clock: HashMap<String, i32> = HashMap::new();
@@ -78,12 +84,13 @@ async fn get_node_by_id(Path(id): Path<String>) -> Result<Json<NodeDetailRespons
     Ok(Json(res))
 }
 
-
 async fn get_message_by_id(Path(id): Path<String>) -> Result<Json<MessageDetailResponse>, StatusCode> {
     let conn = get_conn().await;
 
-    let message: clock_message::Model;
-    let query_res = ClockMessage::find_by_id(id).one(conn).await.expect("REASON");
+    let id: i32 = id.parse().expect("Failed to convert string to i32");
+
+    let message: z_messages::Model;
+    let query_res = z_messages::Entity::find_by_id(id).one(conn).await.expect("REASON");
     match query_res {
         Some(query_res) => {
             message = query_res;
@@ -91,33 +98,52 @@ async fn get_message_by_id(Path(id): Path<String>) -> Result<Json<MessageDetailR
         None => todo!()
     }
 
-    let clock_obj: HashMap<String, Value> = message.clock.as_object().unwrap().iter().map(|(k, v)| (k.clone(), v.clone())).collect();
-    let node_id = clock_obj.keys().next().unwrap().to_string();
-    let count = clock_obj.values().next().unwrap().to_string();
-    let count: i32 = count.parse().unwrap();
+    // let clock_obj: HashMap<String, Value> = message.clock.as_object().unwrap().iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+    // let node_id = clock_obj.keys().next().unwrap().to_string();
+    // let count = clock_obj.values().next().unwrap().to_string();
+    // let count: i32 = count.parse().unwrap();
     let mut clock: HashMap<String, i32> = HashMap::new();
-    clock.insert(node_id, count);
+    // clock.insert(node_id, count);
 
     let res = MessageDetailResponse {
         message_id: message.message_id.clone(),
         clock,
-        event_count: message.event_count.clone(),
-        is_zk: message.is_zk.clone(),
-        from_addr: message.from_addr.unwrap().clone(),
-        to_addr: message.to_addr.unwrap().clone(),
-        raw_message: message.raw_message.unwrap().clone(),
-        signature: message.signature.clone(),
+        from_addr: message.from.clone(),
+        to_addr: message.to.clone(),
+        raw_message: String::from_utf8_lossy(&message.data).to_string(),
+        signature: String::from_utf8_lossy(&message.signature.unwrap()).to_string(),
     };
     Ok(Json(res))
 }
-
-async fn handler() -> Html<&'static str> {
-    Html("<h1>Hello, World!</h1>")
-}
+//
+// async fn handler() -> Html<&'static str> {
+//     Html("<h1>Hello, World!</h1>")
+// }
 
 #[tokio::main]
 async fn main() {
     dotenv::dotenv().ok();
+
+    let node = P2PNode {
+        id: "406b4c9bb2117df0505a58c6c44a99c8817b7639d9c877bdbea5a8e4e0412740".parse().unwrap(),
+        rpc_domain: ("127.0.0.1".to_string()),
+        ws_domain: ("127.0.0.1".to_string()),
+        rpc_port: 13333,
+        ws_port: 13333,
+        public_key: None,
+    };
+
+    task::spawn(async move {
+        let mut interval = time::interval(Duration::from_secs(30));
+        loop {
+            interval.tick().await;
+            // let node = node_clone.lock().unwrap();
+            for node in node.bfs_traverse().await {
+                node.update_node_info().await;
+                node.store_db().await;
+            }
+        }
+    });
 
     let cors = CorsLayer::new()
         .allow_methods(Any)
@@ -130,7 +156,7 @@ async fn main() {
             Router::new()
                 .route("/overview", get(get_nodes_info))
                 .route("/node/:id", get(get_node_by_id))
-                .route("/message/:id", get(get_message_by_id)).layer(cors)
+                .route("/message/:id", get(get_message_by_id)).layer(cors),
         );
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:8080").await.unwrap();

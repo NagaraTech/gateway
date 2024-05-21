@@ -1,0 +1,125 @@
+syntax = "proto3";
+import "google/protobuf/empty.proto";
+package gateway;
+
+service Gateway {
+
+    rpc NodeList(google.protobuf.Empty) returns (NodesOverviewResponse);
+
+
+    rpc NodeDetail(NodeId) returns (NodeDetailResponse);
+
+
+    rpc MessageDetail(MessageId) returns (MessageDetailResponse);
+}
+
+//message NeighborNodes {
+//    repeated string neighbor_node_ids = 1;
+//}
+
+message Node {
+    string node_id = 1;
+    repeated string neighbor_nodes = 2;
+    bool is_alive = 3;
+}
+
+message NodesOverviewResponse {
+    repeated Node nodes =1;
+    uint32 total_node_count =2;
+    uint32 total_message_count =3;
+}
+
+
+message NodeId {
+    string node_id = 1;
+}
+
+message MessageInfo {
+    string message_id = 1;
+    string from_addr = 2;
+    string to_addr = 3;
+}
+
+message NodeDetailResponse {
+    string node_id = 1;
+    bool is_alive = 2;
+    map<string ,int32 > clock =3;
+    repeated MessageInfo message_list = 4;
+}
+
+message MessageId {
+    string message_id = 1;
+}
+
+message MessageDetailResponse {
+    string message_id = 1;
+    map<string ,int32 > clock = 2;
+    int32 event_count = 3;
+    bool is_zk = 4;
+    string from_addr = 5;
+    string to_addr = 6;
+    string raw_message = 7;
+    string signature = 8;
+}
+
+// business data
+// ZMessage.type = Z_TYPE_CHAT
+message ZChat {
+    string message_data = 1;
+    vlc.ClockInfo clock = 2;
+}
+
+// ZMessage.type = Z_TYPE_GATEWAY
+// Gateway just only needs read api
+message ZGateway {
+    GatewayType type = 1;
+    QueryMethod method = 2;
+    bytes data = 3;
+}
+
+enum GatewayType {
+    GATEWAY_TYPE_CLOCK_NODE = 0;
+    GATEWAY_TYPE_MERGE_LOG = 1;   // ref merge log
+    GATEWAY_TYPE_NODE_INFO = 2;  // heartbeat or node info
+    GATEWAY_TYPE_Z_MESSAGE = 3;  // p2p message
+}
+
+enum QueryMethod {
+    QUERY_BY_MSGID = 0;
+    QUERY_BY_TABLE_KEYID = 1;
+}
+
+// ZGateway.type = GATEWAY_TYPE_CLOCK_NODE
+message ClockNode {
+    vlc.Clock clock = 1;
+    bytes id = 2;
+    bytes message_id = 3;
+    uint64 count = 4;
+    uint64 create_at = 5;
+    bytes raw_message = 6;
+}
+
+message ClockNodes {
+    repeated ClockNode clock_nodes = 1;
+}
+
+// ZGateway.type = GATEWAY_TYPE_NODE_INFO
+message NodeInfo {
+    repeated string node_ids = 1;
+}
+
+message QueryResponse {
+    bool success = 1;
+    string reason = 2;
+    bytes data = 3;
+}
+
+// ZGateway.method = QUERY_BY_MSGID
+message QueryByMsgID {
+    string msg_id = 1;
+}
+
+// ZGateway.method = QUERY_BY_TABLE_KEYID
+message QueryByTableKeyID {
+    uint64 last_pos = 1;
+}
