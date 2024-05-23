@@ -7,19 +7,20 @@ message Clock {
 }
 
 message ClockInfos {
-    repeated ClockInfo clock_infos = 1; 
+    repeated ClockInfo clock_infos = 1;
 }
 
 message MergeLogs {
-    repeated MergeLog merge_logs = 1; 
+    repeated MergeLog merge_logs = 1;
 }
 
 message ClockInfo {
     Clock clock = 1;
-    bytes id = 2;
-    bytes message_id = 3;
-    uint64 count = 4;
-    uint64 create_at = 5;
+    bytes node_id = 2;
+    bytes clock_hash = 3;
+    bytes message_id = 4;
+    uint64 count = 5;
+    uint64 create_at = 6;
 }
 
 message MergeLog {
@@ -32,7 +33,7 @@ message MergeLog {
     uint64 merge_at = 7;
 }
 
-// zmessage type = Z_TYPE_CLOCK 
+// zmessage type = Z_TYPE_CLOCK
 message ZClock {
     ClockType type = 1;
     bytes data = 2;

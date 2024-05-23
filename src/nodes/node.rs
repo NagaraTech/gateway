@@ -9,13 +9,23 @@ use crate::business;
 use crate::vlc;
 use crate::zmessage;
 
-use sea_orm::{Database, DatabaseConnection, DbErr, EntityTrait, QuerySelect, TryFromU64};
+use sea_orm::{Database, DatabaseConnection, DbErr, EntityTrait, QuerySelect, TryFromU64, QueryFilter, ColumnTrait, FromQueryResult};
+
 use sea_orm::sea_query::Expr;
 use sea_orm::entity::*;
 use sea_orm::query::*;
 use crate::db::get_conn;
 use crate::entities::{z_messages, merge_logs, clock_infos, node_info};
 use chrono::{NaiveDateTime, Utc, DateTime};
+use crate::nodes::node;
+
+#[derive(Debug, FromQueryResult)]
+struct IndexResult {
+    clock_info_index: i32,
+    merge_log_index: i32,
+    zmessage_index: i32,
+}
+
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct P2PNode {
@@ -28,7 +38,7 @@ pub struct P2PNode {
 }
 
 impl P2PNode {
-    pub async fn query_data(&self, gatewayType: u32, index: u32) -> Vec<u8> {
+    pub async fn query_data(&self, gatewayType: i32, index: i32) -> Vec<u8> {
         let client = Client::new();
         let url = format!("http://{}:{}/rpc{}", self.rpc_domain, self.rpc_port, self.rpc_port);
         let request_data = json!({"method": "queryByKeyId","gatewayType":gatewayType,"index":index});
@@ -57,45 +67,43 @@ impl P2PNode {
     pub async fn store_db(&self) {
         let conn = get_conn().await;
 
-        let clock_nodes_max_id = get_clock_infos_max_id(conn).await.unwrap();
-        let merge_logs_max_id = get_merge_logs_max_id(conn).await.unwrap();
-        let z_messagers_max_id = get_z_messagers_max_id(conn).await.unwrap();
+        let (clock_nodes_max_id, merge_logs_max_id, z_messagers_max_id) = self.get_indexes(conn).await;
 
-        let data = self.query_data(business::GatewayType::ClockNode as u32, clock_nodes_max_id).await;
-        let clock_nodes = business::ClockNodes::decode(&*data).unwrap().clock_nodes;
-        for x in clock_nodes {
-            let clock_json = serde_json::to_string(&x.clock.unwrap().values).expect("Failed to serialize HashMap");
+        let data = self.query_data(business::GatewayType::ClockNode as i32, clock_nodes_max_id).await;
+        let clock_nodes = business::ClockInfos::decode(&*data).unwrap().clock_infos;
+        for x in &clock_nodes {
+            let clock_json = serde_json::to_string(&x.clock.clone().unwrap().values).expect("Failed to serialize HashMap");
             let timestamp_secs = x.create_at / 1000;
             let timestamp_nanos = (x.create_at % 1000) * 1_000_000;
             let create_at = DateTime::from_timestamp(timestamp_secs as i64, timestamp_nanos as u32).unwrap().naive_utc();
-            let new_clock_node = clock_infos::ActiveModel {
+            let new_clock_info = clock_infos::ActiveModel {
                 id: NotSet,
                 clock: ActiveValue::Set(clock_json),
                 node_id: ActiveValue::Set(self.id.to_string()),
-                message_id: ActiveValue::Set(String::from_utf8_lossy(&x.message_id).to_string()),
-                raw_message: ActiveValue::Set(String::from_utf8_lossy(&x.raw_message).to_string()),
+                message_id: ActiveValue::Set(hex::encode(x.message_id.clone())),
                 event_count: ActiveValue::Set(x.count.try_into().unwrap()),
                 create_at: ActiveValue::Set(Some(create_at)),
+                clock_hash: ActiveValue::Set(hex::encode(x.clock_hash.clone())),
             };
-            new_clock_node.insert(conn).await.expect("Fail to Insert Clock Node");
+            new_clock_info.insert(conn).await.expect("Fail to Insert Clock Node");
         }
 
 
-        let data = self.query_data(business::GatewayType::MergeLog as u32, merge_logs_max_id).await;
+        let data = self.query_data(business::GatewayType::MergeLog as i32, merge_logs_max_id).await;
         let merge_logs = vlc::MergeLogs::decode(&*data).unwrap().merge_logs;
-        for x in merge_logs {
+        for x in &merge_logs {
             let timestamp_secs = x.merge_at / 1000;
             let timestamp_nanos = (x.merge_at % 1000) * 1_000_000;
             let merge_at = DateTime::from_timestamp(timestamp_secs as i64, timestamp_nanos as u32).unwrap().naive_utc();
 
             let new_merge_log = merge_logs::ActiveModel {
                 id: NotSet,
-                from_id: ActiveValue::Set(String::from_utf8_lossy(&*x.from_id).to_string()),
-                to_id: ActiveValue::Set(String::from_utf8_lossy(&x.to_id).to_string()),
+                from_id: ActiveValue::Set(hex::encode(x.from_id.clone()).to_string()),
+                to_id: ActiveValue::Set(hex::encode(x.to_id.clone()).to_string()),
                 start_count: ActiveValue::Set(x.start_count.try_into().unwrap()),
                 end_count: ActiveValue::Set(x.end_count.try_into().unwrap()),
-                s_clock_hash: ActiveValue::Set(String::from_utf8_lossy(&x.s_clock_hash).to_string()),
-                e_clock_hash: ActiveValue::Set(String::from_utf8_lossy(&x.e_clock_hash).to_string()),
+                s_clock_hash: ActiveValue::Set(hex::encode(x.s_clock_hash.clone()).to_string()),
+                e_clock_hash: ActiveValue::Set(hex::encode(x.e_clock_hash.clone()).to_string()),
                 merge_at: ActiveValue::Set(merge_at),
                 node_id: ActiveValue::Set(self.id.to_string()),
             };
@@ -103,28 +111,61 @@ impl P2PNode {
         }
 
 
-        let index = 0;
-        let gatewayType = 3;
-        let data = self.query_data(business::GatewayType::ZMessage as u32, z_messagers_max_id).await;
+        let data = self.query_data(business::GatewayType::ZMessage as i32, z_messagers_max_id).await;
         let zmessages = zmessage::ZMessages::decode(&*data).unwrap().messages;
-        for x in zmessages {
+        for x in &zmessages {
             let version: Option<i32> = Some(x.version as i32);
 
             let new_message = z_messages::ActiveModel {
                 id: NotSet,
-                message_id: ActiveValue::Set(String::from_utf8_lossy(&x.id).to_string()),
+                message_id: ActiveValue::Set(hex::encode(x.id.clone())),
                 version: ActiveValue::Set(version),
                 r#type: ActiveValue::Set(x.r#type.try_into().unwrap()),
-                public_key: ActiveValue::Set(Option::from(String::from_utf8_lossy(&x.public_key).to_string())),
-                data: ActiveValue::Set(x.data),
-                signature: ActiveValue::Set(Option::from(x.signature)),
-                from: ActiveValue::Set(String::from_utf8_lossy(&*x.from).to_string()),
-                to: ActiveValue::Set(String::from_utf8_lossy(&*x.to).to_string()),
+                public_key: ActiveValue::Set(Option::from(hex::encode(x.public_key.clone()))),
+                data: ActiveValue::Set(x.data.clone()),
+                signature: ActiveValue::Set(Option::from(x.signature.clone())),
+                from: ActiveValue::Set(hex::encode(&*x.from)),
+                to: ActiveValue::Set(hex::encode(&*x.to)),
                 node_id: ActiveValue::Set(self.id.to_string()),
             };
-            new_message.insert(conn).await.expect("Fail to Insert Merge Log");
+            new_message.insert(conn).await.expect("Fail to Insert ZMessage");
+        }
+
+
+
+        self.update_indexes(conn, clock_nodes.len() as i32, merge_logs.len() as i32, zmessages.len() as i32).await;
+    }
+
+
+    pub async fn get_indexes(&self, db: &DatabaseConnection) -> (i32, i32, i32) {
+        let result = node_info::Entity::find()
+            .select_only()
+            .column(node_info::Column::ClockInfoIndex)
+            .column(node_info::Column::MergeLogIndex)
+            .column(node_info::Column::ZMessageIndex)
+            .filter(node_info::Column::NodeId.eq(self.id.to_string()))
+            .into_model::<IndexResult>()
+            .one(db)
+            .await.expect("Fail to query index").unwrap();
+        (result.clock_info_index, result.merge_log_index, result.zmessage_index)
+    }
+
+    pub async fn update_indexes(&self, db: &DatabaseConnection ,clock_info_index: i32, merge_log_index: i32, zmessage_index: i32) {
+        if let Some(query_node_info) = node_info::Entity::find()
+            .filter(node_info::Column::NodeId.eq(self.id.to_string()))
+            .one(db)
+            .await.expect("Fail to query node info")
+        {
+            let mut query_node_info: node_info::ActiveModel = query_node_info.into();
+
+            query_node_info.clock_info_index = Set(Option::from(clock_info_index));
+            query_node_info.clock_info_index = Set(Option::from(merge_log_index));
+            query_node_info.clock_info_index = Set(Option::from(zmessage_index));
+
+            query_node_info.update(db).await.expect("Fail to update index");
         }
     }
+
 
     pub async fn neighbors(&self) -> Vec<P2PNode> {
         let client = Client::new();
@@ -193,7 +234,7 @@ impl P2PNode {
         let neighbors = self.neighbors().await;
         let conn = get_conn().await;
         let mut neighbor_nodes = Vec::new();
-        for node  in neighbors {
+        for node in neighbors {
             neighbor_nodes.push(node.id.parse().unwrap());
         }
         let mut is_alive = true;
@@ -216,6 +257,9 @@ impl P2PNode {
                 node_id: Set(self.id.to_string()),
                 neighbor_nodes: Set(neighbor_nodes),
                 is_alive: Set(is_alive),
+                clock_info_index: NotSet,
+                merge_log_index: NotSet,
+                z_message_index: NotSet,
             };
             new_node_info.insert(conn).await.expect("Fail to Insert Node Info");
         }

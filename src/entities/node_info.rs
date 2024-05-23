@@ -11,6 +11,9 @@ pub struct Model {
     pub node_id: String,
     pub neighbor_nodes: Vec<String>,
     pub is_alive: bool,
+    pub clock_info_index: Option<i32>,
+    pub merge_log_index: Option<i32>,
+    pub z_message_index: Option<i32>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

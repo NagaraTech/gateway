@@ -10,8 +10,7 @@ pub struct Model {
     pub clock: String,
     pub node_id: String,
     pub message_id: String,
-    #[sea_orm(column_type = "Text")]
-    pub raw_message: String,
+    pub clock_hash: String,
     pub event_count: i32,
     pub create_at: Option<DateTime>,
 }

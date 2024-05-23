@@ -7,13 +7,6 @@ message Clock {
 }
 
 
-message ClockInfo {
-    Clock clock = 1;
-    bytes id = 2;
-    bytes message_id = 3;
-    uint64 count = 4;
-    uint64 create_at = 5;
-}
 
 // business data
 // ZMessage.type = Z_TYPE_CHAT
@@ -55,6 +48,21 @@ message ClockNode {
 message ClockNodes {
     repeated ClockNode clock_nodes = 1;
 }
+
+
+message ClockInfo {
+    Clock clock = 1;
+    bytes node_id = 2;
+    bytes clock_hash = 3;
+    bytes message_id = 4;
+    uint64 count = 5;
+    uint64 create_at = 6;
+}
+
+message ClockInfos {
+    repeated ClockInfo clock_infos = 1;
+}
+
 
 // ZGateway.type = GATEWAY_TYPE_NODE_INFO
 message NodeInfo {
