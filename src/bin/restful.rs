@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use gateway::db::get_conn;
+use gateway::db::connection::get_conn;
 // use gateway::entities::node_info;
 use gateway::restful::response::{MessageDetailResponse, MessageInfo, Node, NodeDetailResponse, NodesOverviewResponse};
 use gateway::entities::{prelude::*, *};
@@ -9,20 +9,20 @@ use axum::{
     http::StatusCode,
     Json, Router,
 };
-use axum::handler::Handler;
 use axum::extract::Path;
 use http::HeaderValue;
 use tower_http::cors::{AllowHeaders, AllowMethods, AllowOrigin, Any, CorsLayer};
 use serde_json::Value;
-use sea_orm::{Database, DatabaseConnection, DbErr, EntityTrait, QuerySelect, TryFromU64};
+use sea_orm::{Database, DatabaseConnection, DbErr, EntityTrait, TryFromU64};
 use sea_orm::entity::*;
 use sea_orm::query::*;
 use gateway::nodes::node::P2PNode;
 use gateway::entities::{z_messages, merge_logs, clock_infos, node_info};
-use tokio::task;
+use tokio;
 use tokio::time::{self, Duration};
-use std::sync::{Arc, Mutex};
-
+use std::sync::{Arc};
+use reqwest::Client;
+use tokio::sync::Mutex;
 async fn get_nodes_info() -> Result<Json<NodesOverviewResponse>, StatusCode> {
     let conn = get_conn().await;
     let nodes: Vec<node_info::Model> = NodeInfo::find().all(conn).await.expect("REASON");
@@ -149,31 +149,42 @@ async fn get_merge_log_by_message_id(Path(id): Path<String>) -> Result<Json<serd
 async fn main() {
     dotenv::dotenv().ok();
 
-    let node = P2PNode {
-        id: "406b4c9bb2117df0505a58c6c44a99c8817b7639d9c877bdbea5a8e4e0412740".parse().unwrap(),
-        rpc_domain: ("127.0.0.1".to_string()),
-        ws_domain: ("127.0.0.1".to_string()),
-        rpc_port: 13333,
-        ws_port: 13333,
-        public_key: None,
-    };
-    for node in node.bfs_traverse().await {
-        node.update_node_info().await;
-        node.store_db().await;
-    }
+    let node = Arc::new(
+        P2PNode {
+            id: "406b4c9bb2117df0505a58c6c44a99c8817b7639d9c877bdbea5a8e4e0412740".parse().unwrap(),
+            rpc_domain: ("127.0.0.1".to_string()),
+            ws_domain: ("127.0.0.1".to_string()),
+            rpc_port: 13333,
+            ws_port: 13333,
+            public_key: None,
+        }
+    );
 
-    // task::spawn(async move {
-    //     let mut interval = time::interval(Duration::from_secs(10));
-    //     loop {
-    //         interval.tick().await;
-    //         // let node = node_clone.lock().unwrap();
-    //         for node in node.bfs_traverse().await {
-    //             node.update_node_info().await;
-    //             node.store_db().await;
-    //         }
-    //         println!("execute update node db task");
-    //     }
-    // });
+    // for node in node.bfs_traverse().await {
+    //     node.update_node_info().await;
+    //     node.store_db().await;
+    // }
+
+
+    let client = Arc::new(Client::new());
+    let conn = get_conn().await;
+    let conn = Arc::new(conn);
+
+
+    let client_clone = Arc::clone(&client);
+    let conn_clone = Arc::clone(&conn);
+    let node_clone = Arc::clone(&node);
+    tokio::spawn(async move {
+        let mut interval = time::interval(Duration::from_secs(10));
+        loop {
+            interval.tick().await;
+            let nodes = node_clone.bfs_traverse(client_clone.clone()).await;
+            for node in nodes {
+                node.update_node_info(client_clone.clone(),&conn_clone).await;
+                node.store_db(client_clone.clone(),&conn_clone).await;
+            }
+        }
+    });
 
     let cors = CorsLayer::new()
         .allow_methods(Any)

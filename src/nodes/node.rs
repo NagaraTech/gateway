@@ -3,6 +3,8 @@ use reqwest::Client;
 use serde_json::{json, Value};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::sync::{Arc};
+use tokio::sync::Mutex;
 use hex;
 use prost::Message;
 use crate::business;
@@ -14,17 +16,19 @@ use sea_orm::{Database, DatabaseConnection, DbErr, EntityTrait, QuerySelect, Try
 use sea_orm::sea_query::Expr;
 use sea_orm::entity::*;
 use sea_orm::query::*;
-use crate::db::get_conn;
-use crate::entities::{z_messages, merge_logs, clock_infos, node_info};
+use crate::db::connection::get_conn;
+// use crate::entities::{z_messages, merge_logs, clock_infos, node_info};
+use crate::db::entities::{z_messages, merge_logs, clock_infos, node_info};
 use chrono::{NaiveDateTime, Utc, DateTime};
 use crate::nodes::node;
-
-#[derive(Debug, FromQueryResult)]
-struct IndexResult {
-    clock_info_index: i32,
-    merge_log_index: i32,
-    zmessage_index: i32,
-}
+use async_trait::async_trait;
+use tonic::client;
+// #[derive(Debug, FromQueryResult)]
+// struct IndexResult {
+//     clock_info_index: i32,
+//     merge_log_index: i32,
+//     zmessage_index: i32,
+// }
 
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -37,9 +41,25 @@ pub struct P2PNode {
     pub public_key: Option<String>,
 }
 
+
+#[async_trait]
+pub trait NodeOps {
+    async fn neighbors(&self) -> Vec<Arc<Mutex<P2PNode>>>;
+    async fn update_node_info(&self);
+    async fn store_db(&self);
+}
+
+
+
+
+
+
+
+
+
 impl P2PNode {
-    pub async fn query_data(&self, gatewayType: i32, index: i32) -> Vec<u8> {
-        let client = Client::new();
+    pub async fn query_data(&self,client: Arc<Client>, gatewayType: i32, index: i32) -> Vec<u8> {
+        // let client = Client::new();
         let url = format!("http://{}:{}/rpc{}", self.rpc_domain, self.rpc_port, self.rpc_port);
         let request_data = json!({"method": "queryByKeyId","gatewayType":gatewayType,"index":index});
         let response = client
@@ -64,12 +84,14 @@ impl P2PNode {
         }
     }
 
-    pub async fn store_db(&self) {
-        let conn = get_conn().await;
+    pub async fn store_db(&self, client: Arc<Client>, conn:&DatabaseConnection ) {
+        // let conn = get_conn().await;
 
         let (clock_nodes_max_id, merge_logs_max_id, z_messagers_max_id) = self.get_indexes(conn).await;
 
-        let data = self.query_data(business::GatewayType::ClockNode as i32, clock_nodes_max_id).await;
+        println!("query record index{} {} {}", clock_nodes_max_id, merge_logs_max_id, z_messagers_max_id);
+
+        let data = self.query_data(client.clone() ,business::GatewayType::ClockNode as i32, clock_nodes_max_id).await;
         let clock_nodes = business::ClockInfos::decode(&*data).unwrap().clock_infos;
         for x in &clock_nodes {
             let clock_json = serde_json::to_string(&x.clock.clone().unwrap().values).expect("Failed to serialize HashMap");
@@ -89,7 +111,7 @@ impl P2PNode {
         }
 
 
-        let data = self.query_data(business::GatewayType::MergeLog as i32, merge_logs_max_id).await;
+        let data = self.query_data(client.clone(),business::GatewayType::MergeLog as i32, merge_logs_max_id).await;
         let merge_logs = vlc::MergeLogs::decode(&*data).unwrap().merge_logs;
         for x in &merge_logs {
             let timestamp_secs = x.merge_at / 1000;
@@ -111,7 +133,7 @@ impl P2PNode {
         }
 
 
-        let data = self.query_data(business::GatewayType::ZMessage as i32, z_messagers_max_id).await;
+        let data = self.query_data(client.clone(),business::GatewayType::ZMessage as i32, z_messagers_max_id).await;
         let zmessages = zmessage::ZMessages::decode(&*data).unwrap().messages;
         for x in &zmessages {
             let version: Option<i32> = Some(x.version as i32);
@@ -131,26 +153,24 @@ impl P2PNode {
             new_message.insert(conn).await.expect("Fail to Insert ZMessage");
         }
 
+        let clock_update_index = clock_nodes.len() as i32 + clock_nodes_max_id;
+        let merge_logs_update_index= merge_logs.len() as i32 + merge_logs_max_id;
+        let zmessages_update_index = zmessages.len() as i32 + z_messagers_max_id;
 
-
-        self.update_indexes(conn, clock_nodes.len() as i32, merge_logs.len() as i32, zmessages.len() as i32).await;
+        println!("{} {} {}", clock_update_index, merge_logs_update_index, zmessages_update_index);
+        self.update_indexes(conn, clock_update_index , merge_logs_update_index, zmessages_update_index).await;
     }
 
 
     pub async fn get_indexes(&self, db: &DatabaseConnection) -> (i32, i32, i32) {
         let result = node_info::Entity::find()
-            .select_only()
-            .column(node_info::Column::ClockInfoIndex)
-            .column(node_info::Column::MergeLogIndex)
-            .column(node_info::Column::ZMessageIndex)
             .filter(node_info::Column::NodeId.eq(self.id.to_string()))
-            .into_model::<IndexResult>()
             .one(db)
             .await.expect("Fail to query index").unwrap();
-        (result.clock_info_index, result.merge_log_index, result.zmessage_index)
+        (result.clock_info_index, result.merge_log_index, result.z_message_index)
     }
 
-    pub async fn update_indexes(&self, db: &DatabaseConnection ,clock_info_index: i32, merge_log_index: i32, zmessage_index: i32) {
+    pub async fn update_indexes(&self, db: &DatabaseConnection, clock_info_index: i32, merge_log_index: i32, zmessage_index: i32) {
         if let Some(query_node_info) = node_info::Entity::find()
             .filter(node_info::Column::NodeId.eq(self.id.to_string()))
             .one(db)
@@ -158,17 +178,16 @@ impl P2PNode {
         {
             let mut query_node_info: node_info::ActiveModel = query_node_info.into();
 
-            query_node_info.clock_info_index = Set(Option::from(clock_info_index));
-            query_node_info.clock_info_index = Set(Option::from(merge_log_index));
-            query_node_info.clock_info_index = Set(Option::from(zmessage_index));
+            query_node_info.clock_info_index = Set(clock_info_index);
+            query_node_info.merge_log_index = Set(merge_log_index);
+            query_node_info.z_message_index = Set(zmessage_index);
 
             query_node_info.update(db).await.expect("Fail to update index");
         }
     }
 
-
-    pub async fn neighbors(&self) -> Vec<P2PNode> {
-        let client = Client::new();
+    pub async fn neighbors(&self, client: Arc<Client>) -> Vec<P2PNode> {
+        // let client = Client::new();
 
         let url = format!("http://{}:{}/rpc{}", self.rpc_domain, self.rpc_port, self.rpc_port);
 
@@ -200,14 +219,13 @@ impl P2PNode {
                     node
                 })
                 .collect();
-
             nodes
         } else {
             Vec::new()
         }
     }
 
-    pub async fn bfs_traverse(&self) -> Vec<P2PNode> {
+    pub async fn bfs_traverse(&self, client: Arc<Client>) -> Vec<P2PNode> {
         let mut visited = HashSet::new();
         let mut queue = VecDeque::new();
         let mut result = Vec::new();
@@ -217,7 +235,7 @@ impl P2PNode {
 
         while let Some(current_node) = queue.pop_front() {
             result.push(current_node.clone());
-            let neighbors = current_node.neighbors().await;
+            let neighbors = current_node.neighbors(client.clone()).await;
             for neighbor in neighbors {
                 let neighbor_id = neighbor.id.clone();
                 if !visited.contains(&neighbor_id) {
@@ -230,10 +248,10 @@ impl P2PNode {
         result
     }
 
-    pub async fn update_node_info(&self) {
-        let neighbors = self.neighbors().await;
-        let conn = get_conn().await;
-        let mut neighbor_nodes = Vec::new();
+    pub async fn update_node_info(&self,client: Arc<Client>, conn:&DatabaseConnection) {
+        let neighbors = self.neighbors(client).await;
+        // let conn = get_conn().await;
+        let mut neighbor_nodes:Vec<String> = Vec::new();
         for node in neighbors {
             neighbor_nodes.push(node.id.parse().unwrap());
         }
@@ -248,14 +266,15 @@ impl P2PNode {
             .await
         {
             let mut active_model: node_info::ActiveModel = existing_record.into();
-            active_model.neighbor_nodes = Set(neighbor_nodes);
+            active_model.neighbor_nodes = Set(serde_json::to_string(&neighbor_nodes).unwrap().to_string());
             active_model.is_alive = Set(is_alive);
             active_model.update(conn).await.expect("Fail to Update Node Info");
         } else {
             let new_node_info = node_info::ActiveModel {
                 id: NotSet,
                 node_id: Set(self.id.to_string()),
-                neighbor_nodes: Set(neighbor_nodes),
+                // neighbor_nodes: Set(neighbor_nodes),
+                neighbor_nodes: Set(serde_json::to_string(&neighbor_nodes).unwrap().to_string()),
                 is_alive: Set(is_alive),
                 clock_info_index: NotSet,
                 merge_log_index: NotSet,
@@ -267,38 +286,38 @@ impl P2PNode {
 }
 
 
-async fn get_merge_logs_max_id(db: &DatabaseConnection) -> Result<u32, DbErr> {
-    let max_id = merge_logs::Entity::find()
-        .select_only()
-        .column_as(Expr::col(merge_logs::Column::Id).max(), "max_id")
-        .into_tuple::<Option<i32>>()
-        .one(db)
-        .await?
-        .flatten()
-        .unwrap_or(0);
-    Ok(max_id as u32)
-}
-
-async fn get_clock_infos_max_id(db: &DatabaseConnection) -> Result<u32, DbErr> {
-    let max_id = clock_infos::Entity::find()
-        .select_only()
-        .column_as(Expr::col(clock_infos::Column::Id).max(), "max_id")
-        .into_tuple::<Option<i32>>()
-        .one(db)
-        .await?
-        .flatten()
-        .unwrap_or(0);
-    Ok(max_id as u32)
-}
-
-async fn get_z_messagers_max_id(db: &DatabaseConnection) -> Result<u32, DbErr> {
-    let max_id = z_messages::Entity::find()
-        .select_only()
-        .column_as(Expr::col(z_messages::Column::Id).max(), "max_id")
-        .into_tuple::<Option<i32>>()
-        .one(db)
-        .await?
-        .flatten()
-        .unwrap_or(0);
-    Ok(max_id as u32)
-}
+// async fn get_merge_logs_max_id(db: &DatabaseConnection) -> Result<u32, DbErr> {
+//     let max_id = merge_logs::Entity::find()
+//         .select_only()
+//         .column_as(Expr::col(merge_logs::Column::Id).max(), "max_id")
+//         .into_tuple::<Option<i32>>()
+//         .one(db)
+//         .await?
+//         .flatten()
+//         .unwrap_or(0);
+//     Ok(max_id as u32)
+// }
+//
+// async fn get_clock_infos_max_id(db: &DatabaseConnection) -> Result<u32, DbErr> {
+//     let max_id = clock_infos::Entity::find()
+//         .select_only()
+//         .column_as(Expr::col(clock_infos::Column::Id).max(), "max_id")
+//         .into_tuple::<Option<i32>>()
+//         .one(db)
+//         .await?
+//         .flatten()
+//         .unwrap_or(0);
+//     Ok(max_id as u32)
+// }
+//
+// async fn get_z_messagers_max_id(db: &DatabaseConnection) -> Result<u32, DbErr> {
+//     let max_id = z_messages::Entity::find()
+//         .select_only()
+//         .column_as(Expr::col(z_messages::Column::Id).max(), "max_id")
+//         .into_tuple::<Option<i32>>()
+//         .one(db)
+//         .await?
+//         .flatten()
+//         .unwrap_or(0);
+//     Ok(max_id as u32)
+// }

@@ -1,5 +1,4 @@
 use serde::{Serialize, Deserialize};
-
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message,Serialize, Deserialize)]
 pub struct Node {
