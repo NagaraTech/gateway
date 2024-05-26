@@ -1,10 +1,12 @@
-1.配置.env:
-配置请参考.env文件
+1. Config .env:
+For details, please refer to .env file
 
-2.SetUp数据库：
+2. Run cargo build to generate proto
+
+3. SetUp Postgre Database ：
 cargo run --release --bin migration
 
-3.启动：
+4. Start restful server：
 cargo run --release --bin restful-server 
 
 
