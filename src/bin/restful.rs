@@ -149,14 +149,21 @@ async fn get_merge_log_by_message_id(Path(id): Path<String>) -> Result<Json<serd
 async fn main() {
     dotenv::dotenv().ok();
 
+    let seed_node_id = std::env::var("SEED_NODE_ID").expect("SEED_NODE_ID not set");
+    let seed_node_rpc_domain = std::env::var("SEED_NODE_RPC_DOMAIN").expect("SEED_NODE_RPC_DOMAIN not set");
+    let seed_node_ws_domain = std::env::var("SEED_NODE_WS_DOMAIN").expect("SEED_NODE_WS_DOMAIN not set");
+    let seed_node_rpc_port = std::env::var("SEED_NODE_RPC_PORT").expect("SEED_NODE_RPC_PORT not set");
+    let seed_node_ws_port = std::env::var("SEED_NODE_WS_PORT").expect("SEED_NODE_WS_PORT not set");
+    let seed_node_public_key = std::env::var("SEED_NODE_PUBLIC_KEY").expect("SEED_NODE_PUBLIC_KEY not set");
+
     let node = Arc::new(
         P2PNode {
-            id: "406b4c9bb2117df0505a58c6c44a99c8817b7639d9c877bdbea5a8e4e0412740".parse().unwrap(),
-            rpc_domain: ("127.0.0.1".to_string()),
-            ws_domain: ("127.0.0.1".to_string()),
-            rpc_port: 13333,
-            ws_port: 13333,
-            public_key: None,
+            id: seed_node_id,
+            rpc_domain: seed_node_rpc_domain,
+            ws_domain: seed_node_ws_domain,
+            rpc_port: seed_node_rpc_port.parse().unwrap(),
+            ws_port: seed_node_ws_port.parse().unwrap(),
+            public_key: Option::from(seed_node_public_key),
         }
     );
 
@@ -202,7 +209,8 @@ async fn main() {
                 .layer(cors),
         );
 
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:8080").await.unwrap();
+    let port = std::env::var("RESTFUL_PORT").expect("RESTFUL_PORT not set");
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:".to_owned() + &*port).await.unwrap();
     axum::serve(listener, app.into_make_service())
         .await
         .unwrap();
