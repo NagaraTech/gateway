@@ -2,30 +2,23 @@ use std::collections::HashMap;
 use gateway::db::connection::get_conn;
 // use gateway::entities::node_info;
 use gateway::restful::response::{MessageDetailResponse, MessageInfo, Node, NodeDetailResponse, NodesOverviewResponse};
-use gateway::entities::{prelude::*, *};
 use axum::{
-    response::Html,
-    routing::{get, post},
+    routing::{get},
     http::StatusCode,
     Json, Router,
 };
 use axum::extract::Path;
-use http::HeaderValue;
-use tower_http::cors::{AllowHeaders, AllowMethods, AllowOrigin, Any, CorsLayer};
-use serde_json::Value;
-use sea_orm::{Database, DatabaseConnection, DbErr, EntityTrait, TryFromU64};
+use tower_http::cors::{Any, CorsLayer};
 use sea_orm::entity::*;
 use sea_orm::query::*;
 use gateway::nodes::node::P2PNode;
 use gateway::entities::{z_messages, merge_logs, clock_infos, node_info};
-use tokio;
 use tokio::time::{self, Duration};
 use std::sync::{Arc};
 use reqwest::Client;
-use tokio::sync::Mutex;
 async fn get_nodes_info() -> Result<Json<NodesOverviewResponse>, StatusCode> {
     let conn = get_conn().await;
-    let nodes: Vec<node_info::Model> = NodeInfo::find().all(conn).await.expect("REASON");
+    let nodes: Vec<node_info::Model> = node_info::Entity::find().all(conn).await.expect("REASON");
     let message_count = z_messages::Entity::find().count(conn).await.expect("REASON");
     let mut nodes_response: Vec<Node> = vec![];
     for n in &nodes {
@@ -121,13 +114,9 @@ async fn get_message_by_id(Path(id): Path<String>) -> Result<Json<MessageDetailR
 
 async fn get_merge_log_by_message_id(Path(id): Path<String>) -> Result<Json<serde_json::Value>, StatusCode> {
     let conn = get_conn().await;
-
-    let message: z_messages::Model;
     let query_res = z_messages::Entity::find().filter(z_messages::Column::MessageId.eq(id.clone())).one(conn).await.expect("Fail to query message");
     match query_res {
-        Some(query_res) => {
-            message = query_res;
-        }
+        Some(..) => {}
         None => return Err(StatusCode::NOT_FOUND)
     }
 

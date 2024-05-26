@@ -5,30 +5,15 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::{Arc};
 use tokio::sync::Mutex;
-use hex;
 use prost::Message;
 use crate::business;
 use crate::vlc;
 use crate::zmessage;
-
-use sea_orm::{Database, DatabaseConnection, DbErr, EntityTrait, QuerySelect, TryFromU64, QueryFilter, ColumnTrait, FromQueryResult};
-
-use sea_orm::sea_query::Expr;
+use sea_orm::{DatabaseConnection,  QueryFilter};
 use sea_orm::entity::*;
-use sea_orm::query::*;
-use crate::db::connection::get_conn;
-// use crate::entities::{z_messages, merge_logs, clock_infos, node_info};
 use crate::db::entities::{z_messages, merge_logs, clock_infos, node_info};
-use chrono::{NaiveDateTime, Utc, DateTime};
-use crate::nodes::node;
+use chrono::{DateTime};
 use async_trait::async_trait;
-use tonic::client;
-// #[derive(Debug, FromQueryResult)]
-// struct IndexResult {
-//     clock_info_index: i32,
-//     merge_log_index: i32,
-//     zmessage_index: i32,
-// }
 
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -58,10 +43,10 @@ pub trait NodeOps {
 
 
 impl P2PNode {
-    pub async fn query_data(&self,client: Arc<Client>, gatewayType: i32, index: i32) -> Vec<u8> {
+    pub async fn query_data(&self,client: Arc<Client>, gateway_type: i32, index: i32) -> Vec<u8> {
         // let client = Client::new();
         let url = format!("http://{}:{}/rpc{}", self.rpc_domain, self.rpc_port, self.rpc_port);
-        let request_data = json!({"method": "queryByKeyId","gatewayType":gatewayType,"index":index});
+        let request_data = json!({"method": "queryByKeyId","gatewayType":gateway_type,"index":index});
         let response = client
             .post(&url)
             .header("Content-Type", "application/json; charset=utf-8")

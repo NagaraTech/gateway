@@ -1,7 +1,6 @@
 use sea_orm::entity::prelude::*;
 use sea_orm::{Database, DbBackend, Statement};
 use tokio::sync::OnceCell;
-use sea_orm::*;
 use sea_orm_migration::prelude::*;
 use super::migration::Migrator;
 // use super::entities::{prelude::*, *};

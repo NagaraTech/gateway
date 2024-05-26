@@ -1,4 +1,3 @@
-use log::info;
 use gateway::db::connection::setup_db;
 #[tokio::main]
 async fn main() {

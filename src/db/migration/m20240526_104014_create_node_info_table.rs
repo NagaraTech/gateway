@@ -1,5 +1,4 @@
 use sea_orm_migration::prelude::*;
-use crate::db::migration::m20240526_104001_create_merge_logs_table::MergeLogs;
 
 #[derive(DeriveMigrationName)]
 pub struct Migration;
