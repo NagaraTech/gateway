@@ -12,7 +12,7 @@ use tower_http::cors::{Any, CorsLayer};
 use sea_orm::entity::*;
 use sea_orm::query::*;
 use gateway::nodes::node::P2PNode;
-use gateway::entities::{z_messages, merge_logs, clock_infos, node_info};
+use gateway::db::entities::{z_messages, merge_logs, clock_infos, node_info};
 use tokio::time::{self, Duration};
 use std::sync::{Arc};
 use reqwest::Client;
@@ -21,10 +21,12 @@ async fn get_nodes_info() -> Result<Json<NodesOverviewResponse>, StatusCode> {
     let nodes: Vec<node_info::Model> = node_info::Entity::find().all(conn).await.expect("REASON");
     let message_count = z_messages::Entity::find().count(conn).await.expect("REASON");
     let mut nodes_response: Vec<Node> = vec![];
+
     for n in &nodes {
+        let neighbor_nodes: Vec<String> = serde_json::from_str(&*n.neighbor_nodes.clone()).expect("Failed to parse JSON");
         nodes_response.push(Node {
             node_id: n.node_id.clone(),
-            neighbor_nodes: n.neighbor_nodes.clone(),
+            neighbor_nodes,
             is_alive: n.is_alive.clone(),
         })
     }
