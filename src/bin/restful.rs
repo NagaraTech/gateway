@@ -15,7 +15,7 @@ use gateway::nodes::node::P2PNode;
 use gateway::db::entities::{z_messages, merge_logs, clock_infos, node_info};
 use tokio::time::{self, Duration};
 use std::sync::{Arc};
-use reqwest::Client;
+use reqwest::ClientBuilder;
 async fn get_nodes_info() -> Result<Json<NodesOverviewResponse>, StatusCode> {
     let conn = get_conn().await;
     let nodes: Vec<node_info::Model> = node_info::Entity::find().all(conn).await.expect("REASON");
@@ -164,7 +164,12 @@ async fn main() {
     // }
 
 
-    let client = Arc::new(Client::new());
+    let client = Arc::new(
+        ClientBuilder::new()
+            .timeout(Duration::from_secs(5)) // 设置超时时间为10秒
+            .build()
+            .expect("Failed to build client")
+    );
     let conn = get_conn().await;
     let conn = Arc::new(conn);
 
@@ -178,6 +183,7 @@ async fn main() {
             interval.tick().await;
             let nodes = node_clone.bfs_traverse(client_clone.clone()).await;
             for node in nodes {
+                println!("Handle node: {}", node.id);
                 node.update_node_info(client_clone.clone(),&conn_clone).await;
                 node.store_db(client_clone.clone(),&conn_clone).await;
             }

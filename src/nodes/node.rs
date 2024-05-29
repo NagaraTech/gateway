@@ -9,7 +9,7 @@ use prost::Message;
 use crate::business;
 use crate::vlc;
 use crate::zmessage;
-use sea_orm::{DatabaseConnection,  QueryFilter};
+use sea_orm::{DatabaseConnection, QueryFilter};
 use sea_orm::entity::*;
 use crate::db::entities::{z_messages, merge_logs, clock_infos, node_info};
 use chrono::{DateTime};
@@ -35,15 +35,8 @@ pub trait NodeOps {
 }
 
 
-
-
-
-
-
-
-
 impl P2PNode {
-    pub async fn query_data(&self,client: Arc<Client>, gateway_type: i32, index: i32) -> Vec<u8> {
+    pub async fn query_data(&self, client: Arc<Client>, gateway_type: i32, index: i32) -> Vec<u8> {
         // let client = Client::new();
         let url = format!("http://{}:{}/rpc{}", self.rpc_domain, self.rpc_port, self.rpc_port);
         let request_data = json!({"method": "queryByKeyId","gatewayType":gateway_type,"index":index});
@@ -52,32 +45,41 @@ impl P2PNode {
             .header("Content-Type", "application/json; charset=utf-8")
             .json(&request_data)
             .send()
-            .await
-            .expect("Failed to send request");
+            .await;
 
-
-        if response.status().is_success() {
-            let json_data: HashMap<String, Value> = response.json().await.expect("Failed to parse JSON");
-            let hex_string = json_data["result"].as_str().expect("Expected a string");
-            let mut bytes = vec![0u8; hex_string.len() / 2];
-            hex::decode_to_slice(hex_string, &mut bytes).expect("Failed to decode hex string");
-            let query_res = business::QueryResponse::decode(&*bytes);
-
-            query_res.unwrap().data
-        } else {
-            Vec::new()
+        match response {
+            Ok(resp) => {
+                match resp.json::<HashMap<String, Value>>().await {
+                    Ok(json_data) => {
+                        let hex_string = json_data["result"].as_str().expect("Expected a string");
+                        let mut bytes = vec![0u8; hex_string.len() / 2];
+                        hex::decode_to_slice(hex_string, &mut bytes).expect("Failed to decode hex string");
+                        let query_res = business::QueryResponse::decode(&*bytes);
+                        query_res.unwrap().data
+                    }
+                    Err(e) => {
+                        eprintln!("Failed to parse JSON: {:?}", e);
+                        Vec::new()
+                    }
+                }
+            }
+            Err(e) => {
+                eprintln!("Failed to send request: {:?}", e);
+                Vec::new()
+            }
         }
     }
 
-    pub async fn store_db(&self, client: Arc<Client>, conn:&DatabaseConnection ) {
+    pub async fn store_db(&self, client: Arc<Client>, conn: &DatabaseConnection) {
         // let conn = get_conn().await;
 
         let (clock_nodes_max_id, merge_logs_max_id, z_messagers_max_id) = self.get_indexes(conn).await;
 
         println!("query record index{} {} {}", clock_nodes_max_id, merge_logs_max_id, z_messagers_max_id);
 
-        let data = self.query_data(client.clone() ,business::GatewayType::ClockNode as i32, clock_nodes_max_id).await;
+        let data = self.query_data(client.clone(), business::GatewayType::ClockNode as i32, clock_nodes_max_id).await;
         let clock_nodes = business::ClockInfos::decode(&*data).unwrap().clock_infos;
+        println!("{:?}", data);
         for x in &clock_nodes {
             let clock_json = serde_json::to_string(&x.clock.clone().unwrap().values).expect("Failed to serialize HashMap");
             let timestamp_secs = x.create_at / 1000;
@@ -96,7 +98,7 @@ impl P2PNode {
         }
 
 
-        let data = self.query_data(client.clone(),business::GatewayType::MergeLog as i32, merge_logs_max_id).await;
+        let data = self.query_data(client.clone(), business::GatewayType::MergeLog as i32, merge_logs_max_id).await;
         let merge_logs = vlc::MergeLogs::decode(&*data).unwrap().merge_logs;
         for x in &merge_logs {
             let timestamp_secs = x.merge_at / 1000;
@@ -118,7 +120,7 @@ impl P2PNode {
         }
 
 
-        let data = self.query_data(client.clone(),business::GatewayType::ZMessage as i32, z_messagers_max_id).await;
+        let data = self.query_data(client.clone(), business::GatewayType::ZMessage as i32, z_messagers_max_id).await;
         let zmessages = zmessage::ZMessages::decode(&*data).unwrap().messages;
         for x in &zmessages {
             let version: Option<i32> = Some(x.version as i32);
@@ -139,11 +141,11 @@ impl P2PNode {
         }
 
         let clock_update_index = clock_nodes.len() as i32 + clock_nodes_max_id;
-        let merge_logs_update_index= merge_logs.len() as i32 + merge_logs_max_id;
+        let merge_logs_update_index = merge_logs.len() as i32 + merge_logs_max_id;
         let zmessages_update_index = zmessages.len() as i32 + z_messagers_max_id;
 
-        println!("{} {} {}", clock_update_index, merge_logs_update_index, zmessages_update_index);
-        self.update_indexes(conn, clock_update_index , merge_logs_update_index, zmessages_update_index).await;
+        println!("update indexes: {} {} {}", clock_update_index, merge_logs_update_index, zmessages_update_index);
+        self.update_indexes(conn, clock_update_index, merge_logs_update_index, zmessages_update_index).await;
     }
 
 
@@ -233,10 +235,10 @@ impl P2PNode {
         result
     }
 
-    pub async fn update_node_info(&self,client: Arc<Client>, conn:&DatabaseConnection) {
+    pub async fn update_node_info(&self, client: Arc<Client>, conn: &DatabaseConnection) {
         let neighbors = self.neighbors(client).await;
         // let conn = get_conn().await;
-        let mut neighbor_nodes:Vec<String> = Vec::new();
+        let mut neighbor_nodes: Vec<String> = Vec::new();
         for node in neighbors {
             neighbor_nodes.push(node.id.parse().unwrap());
         }
