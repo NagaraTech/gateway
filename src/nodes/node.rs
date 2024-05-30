@@ -39,7 +39,9 @@ impl P2PNode {
     pub async fn query_data(&self, client: Arc<Client>, gateway_type: i32, index: i32) -> Vec<u8> {
         // let client = Client::new();
         let url = format!("http://{}:{}/rpc{}", self.rpc_domain, self.rpc_port, self.rpc_port);
-        let request_data = json!({"method": "queryByKeyId","gatewayType":gateway_type,"index":index});
+        println!("Request queryByKeyId {}", url);
+        let request_id = "fake123";
+        let request_data = json!({"id":request_id ,"method": "queryByKeyId","gatewayType":gateway_type,"index":index});
         let response = client
             .post(&url)
             .header("Content-Type", "application/json; charset=utf-8")
@@ -51,11 +53,23 @@ impl P2PNode {
             Ok(resp) => {
                 match resp.json::<HashMap<String, Value>>().await {
                     Ok(json_data) => {
-                        let hex_string = json_data["result"].as_str().expect("Expected a string");
-                        let mut bytes = vec![0u8; hex_string.len() / 2];
-                        hex::decode_to_slice(hex_string, &mut bytes).expect("Failed to decode hex string");
-                        let query_res = business::QueryResponse::decode(&*bytes);
-                        query_res.unwrap().data
+                        let key = "result";
+                        if json_data.contains_key("result") {
+                            let hex_string = json_data["result"].as_str().expect("Expected a string");
+                            let mut bytes = vec![0u8; hex_string.len() / 2];
+                            hex::decode_to_slice(hex_string, &mut bytes).expect("Failed to decode hex string");
+                            let query_res = business::QueryResponse::decode(&*bytes);
+                            query_res.unwrap().data
+                        } else {
+                            println!("The key '{}' does not exist in the JSON data.", key);
+                            Vec::new()
+                        }
+
+                        // let hex_string = json_data["result"].as_str().expect("Expected a string");
+                        // let mut bytes = vec![0u8; hex_string.len() / 2];
+                        // hex::decode_to_slice(hex_string, &mut bytes).expect("Failed to decode hex string");
+                        // let query_res = business::QueryResponse::decode(&*bytes);
+                        // query_res.unwrap().data
                     }
                     Err(e) => {
                         eprintln!("Failed to parse JSON: {:?}", e);
