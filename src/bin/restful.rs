@@ -15,6 +15,7 @@ use gateway::nodes::node::P2PNode;
 use gateway::db::entities::{z_messages, merge_logs, clock_infos, node_info};
 use tokio::time::{self, Duration};
 use std::sync::{Arc};
+use clap::builder::Str;
 use reqwest::ClientBuilder;
 async fn get_nodes_info() -> Result<Json<NodesOverviewResponse>, StatusCode> {
     let conn = get_conn().await;
@@ -92,7 +93,10 @@ async fn get_message_by_id(Path(id): Path<String>) -> Result<Json<MessageDetailR
 
     let mut clock_json_str_list = Vec::new();
     for clock_info in node_clock_infos_query {
-        clock_json_str_list.push(clock_info.clock);
+        let mut clock_map:HashMap<String,String> = HashMap::new();
+        clock_map.insert(clock_info.node_id,clock_info.clock);
+        let json_string = serde_json::to_string(&clock_map)?;
+        clock_json_str_list.push(json_string);
     }
 
     let res = MessageDetailResponse {
