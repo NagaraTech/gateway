@@ -138,6 +138,7 @@ impl P2PNode {
         let zmessages = zmessage::ZMessages::decode(&*data).unwrap().messages;
         for x in &zmessages {
             let version: Option<i32> = Some(x.version as i32);
+            println!("XXXXX is : {:?}", x);
 
             let data = business::ZChat::decode(&*x.data.clone()).unwrap().message_data;
             println!("ZChat message_data {:?}", data);
