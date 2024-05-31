@@ -93,8 +93,9 @@ async fn get_message_by_id(Path(id): Path<String>) -> Result<Json<MessageDetailR
 
     let mut clock_json_str_list = Vec::new();
     for clock_info in node_clock_infos_query {
-        let mut clock_map:HashMap<String,String> = HashMap::new();
-        clock_map.insert(clock_info.node_id,clock_info.clock);
+        let clock_content: HashMap<String, String> = serde_json::from_str(&*clock_info.clock).unwrap();
+        let mut clock_map:HashMap<String,HashMap<String, String>> = HashMap::new();
+        clock_map.insert(clock_info.node_id,clock_content);
         let json_string = serde_json::to_string(&clock_map).unwrap();
         clock_json_str_list.push(json_string);
     }
