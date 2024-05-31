@@ -90,71 +90,22 @@ async fn get_message_by_id(Path(id): Path<String>) -> Result<Json<MessageDetailR
 
     let node_clock_infos_query: Vec<clock_infos::Model> = clock_infos::Entity::find().filter(clock_infos::Column::MessageId.eq(id.clone())).all(conn).await.expect("Fail to query");
 
-    let mut max_clock = 0;
+    let mut clock_json_str_list = Vec::new();
     for clock_info in node_clock_infos_query {
-        let clock: HashMap<String, u32> = serde_json::from_str(&*clock_info.clock).expect("JSON was not well-formatted");
-        let str = clock.values().next().unwrap().to_string();
-        let num: i32 = str.parse().unwrap();
-        if num > max_clock {
-            max_clock = num
-        }
+        clock_json_str_list.push(clock_info.clock);
     }
-
-    let mut clock: HashMap<String, i32> = HashMap::new();
-    clock.insert(message.node_id, max_clock);
 
     let res = MessageDetailResponse {
         message_id: message.message_id.clone(),
-        clock,
         from_addr: message.from.clone(),
         to_addr: message.to.clone(),
-        raw_message: message.data,
+        clock_json_str_list,
+        message_type: message.r#type,
         signature: message.signature.unwrap(),
+        message_data: vec![],
     };
     Ok(Json(res))
 }
-
-
-async fn get_clocks_by_message_id(Path(id): Path<String>) -> Result<Json<MessageDetailResponse>, StatusCode> {
-    let conn = get_conn().await;
-
-    let message: z_messages::Model;
-    let query_res = z_messages::Entity::find().filter(z_messages::Column::MessageId.eq(id.clone())).one(conn).await.expect("REASON");
-    match query_res {
-        Some(query_res) => {
-            message = query_res;
-        }
-        None => return Err(StatusCode::NOT_FOUND)
-    }
-
-    let node_clock_infos_query: Vec<clock_infos::Model> = clock_infos::Entity::find().filter(clock_infos::Column::MessageId.eq(id.clone())).all(conn).await.expect("Fail to query");
-
-    let mut max_clock = 0;
-    for clock_info in node_clock_infos_query {
-        let clock: HashMap<String, u32> = serde_json::from_str(&*clock_info.clock).expect("JSON was not well-formatted");
-        let str = clock.values().next().unwrap().to_string();
-        let num: i32 = str.parse().unwrap();
-        if num > max_clock {
-            max_clock = num
-        }
-    }
-
-    let mut clock: HashMap<String, i32> = HashMap::new();
-    clock.insert(message.node_id, max_clock);
-
-    let res = MessageDetailResponse {
-        message_id: message.message_id.clone(),
-        clock,
-        from_addr: message.from.clone(),
-        to_addr: message.to.clone(),
-        raw_message: message.data,
-        signature: message.signature.unwrap(),
-    };
-    Ok(Json(res))
-}
-
-
-
 
 
 async fn get_merge_log_by_message_id(Path(id): Path<String>) -> Result<Json<serde_json::Value>, StatusCode> {

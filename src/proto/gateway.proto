@@ -51,11 +51,22 @@ message MessageId {
     string message_id = 1;
 }
 
+enum ZType {
+    Z_TYPE_RNG = 0;
+    Z_TYPE_EVENT = 1;
+    Z_TYPE_CLOCK = 2;
+    Z_TYPE_GATEWAY = 3;
+    Z_TYPE_ZCHAT = 4;
+}
+
+
 message MessageDetailResponse {
     string message_id = 1;
     map<string ,int32 > clock = 2;
-    string from_addr = 5;
-    string to_addr = 6;
-    bytes raw_message = 7;
+    string from_addr = 3;
+    string to_addr = 4;
+    repeated string clock_json_str_list =5;
+    ZType message_type = 6;
+    bytes message_data = 7;
     bytes signature = 8;
 }
