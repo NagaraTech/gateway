@@ -140,6 +140,7 @@ impl P2PNode {
             let version: Option<i32> = Some(x.version as i32);
 
             let data = business::ZChat::decode(&*x.data.clone()).unwrap().message_data;
+            println!("ZChat message_data {:?}", data);
 
             let new_message = z_messages::ActiveModel {
                 id: NotSet,
