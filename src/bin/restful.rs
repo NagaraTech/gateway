@@ -103,12 +103,16 @@ async fn get_message_by_id(Path(id): Path<String>) -> Result<Json<MessageDetailR
     let mut clock: HashMap<String, i32> = HashMap::new();
     clock.insert(message.node_id, max_clock);
 
+    let bytes = hex::decode(message.data).expect("Failed to decode hex string");
+
+    let raw_message = std::str::from_utf8(&bytes).expect("Failed to convert bytes to string");
+
     let res = MessageDetailResponse {
         message_id: message.message_id.clone(),
         clock,
         from_addr: message.from.clone(),
         to_addr: message.to.clone(),
-        raw_message: String::from_utf8_lossy(&message.data).to_string(),
+        raw_message: raw_message.to_string(),
         signature: String::from_utf8_lossy(&message.signature.unwrap()).to_string(),
     };
     Ok(Json(res))
