@@ -16,6 +16,7 @@ use gateway::db::entities::{z_messages, merge_logs, clock_infos, node_info};
 use tokio::time::{self, Duration};
 use std::sync::{Arc};
 use reqwest::ClientBuilder;
+
 async fn get_nodes_info() -> Result<Json<NodesOverviewResponse>, StatusCode> {
     let conn = get_conn().await;
     let nodes: Vec<node_info::Model> = node_info::Entity::find().all(conn).await.expect("REASON");
@@ -103,19 +104,36 @@ async fn get_message_by_id(Path(id): Path<String>) -> Result<Json<MessageDetailR
     let mut clock: HashMap<String, i32> = HashMap::new();
     clock.insert(message.node_id, max_clock);
 
-    let bytes = hex::decode(message.data).expect("Failed to decode hex string");
 
-    let raw_message = std::str::from_utf8(&bytes).expect("Failed to convert bytes to string");
+    match hex::decode(message.data) {
+        Ok(bytes) => {
+            match std::str::from_utf8(&bytes) {
+                Ok(raw_message) => {
+                    println!("Decoded message: {}", raw_message);
+                    let res = MessageDetailResponse {
+                        message_id: message.message_id.clone(),
+                        clock,
+                        from_addr: message.from.clone(),
+                        to_addr: message.to.clone(),
+                        raw_message: raw_message.to_string(),
+                        signature: String::from_utf8_lossy(&message.signature.unwrap()).to_string(),
+                    };
+                    Ok(Json(res))
+                }
+                Err(e) => {
+                    println!("Failed to convert bytes to string: {:?}", e);
+                    Err(StatusCode::BAD_REQUEST)
+                }
+            }
+        }
+        Err(e) => {
+            println!("Failed to decode hex string: {:?}", e);
+            Err(StatusCode::BAD_REQUEST)
+        }
+    }
 
-    let res = MessageDetailResponse {
-        message_id: message.message_id.clone(),
-        clock,
-        from_addr: message.from.clone(),
-        to_addr: message.to.clone(),
-        raw_message: raw_message.to_string(),
-        signature: String::from_utf8_lossy(&message.signature.unwrap()).to_string(),
-    };
-    Ok(Json(res))
+
+
 }
 
 async fn get_merge_log_by_message_id(Path(id): Path<String>) -> Result<Json<serde_json::Value>, StatusCode> {
@@ -188,8 +206,8 @@ async fn main() {
             let nodes = node_clone.bfs_traverse(client_clone.clone()).await;
             for node in nodes {
                 println!("Handle node: {}", node.id);
-                node.update_node_info(client_clone.clone(),&conn_clone).await;
-                node.store_db(client_clone.clone(),&conn_clone).await;
+                node.update_node_info(client_clone.clone(), &conn_clone).await;
+                node.store_db(client_clone.clone(), &conn_clone).await;
             }
         }
     });
