@@ -102,7 +102,7 @@ async fn get_message_by_id(Path(id): Path<String>) -> Result<Json<MessageDetailR
         clock_json_str_list,
         message_type: message.r#type,
         signature: message.signature.unwrap(),
-        message_data: vec![],
+        message_data: message.data,
     };
     Ok(Json(res))
 }
