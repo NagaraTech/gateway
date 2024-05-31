@@ -14,8 +14,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let bussiness = "src/proto/bussiness.proto";
     let vlc = "src/proto/vlc.proto";
     let zmessage = "src/proto/zmessage.proto";
+    let gateway = "src/proto/gateway.proto";
 
-    prost_build::compile_protos(&[bussiness,vlc,zmessage], &["src/"])?;
+    prost_build::compile_protos(&[bussiness,vlc,zmessage,gateway], &["src/"])?;
 
     Ok(())
 }

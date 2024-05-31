@@ -19,3 +19,7 @@ pub mod vlc {
 pub mod zmessage {
     include!(concat!(env!("OUT_DIR"), "/zmessage.rs"));
 }
+
+pub mod gateway_response {
+    include!(concat!(env!("OUT_DIR"), "/gateway.rs"));
+}

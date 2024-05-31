@@ -13,7 +13,7 @@ pub struct Node {
 #[derive(Clone, PartialEq, ::prost::Message,Serialize, Deserialize)]
 pub struct NodesOverviewResponse {
     #[prost(message, repeated, tag = "1")]
-    pub nodes: ::prost::alloc::vec::Vec<crate::response::Node>,
+    pub nodes: ::prost::alloc::vec::Vec<Node>,
     #[prost(uint32, tag = "2")]
     pub total_node_count: u32,
     #[prost(uint32, tag = "3")]
@@ -45,7 +45,7 @@ pub struct NodeDetailResponse {
     #[prost(map = "string, int32", tag = "3")]
     pub clock: ::std::collections::HashMap<::prost::alloc::string::String, i32>,
     #[prost(message, repeated, tag = "4")]
-    pub message_list: ::prost::alloc::vec::Vec<crate::response::MessageInfo>,
+    pub message_list: ::prost::alloc::vec::Vec<MessageInfo>,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message,Serialize, Deserialize)]
@@ -64,8 +64,8 @@ pub struct MessageDetailResponse {
     pub from_addr: ::prost::alloc::string::String,
     #[prost(string, tag = "6")]
     pub to_addr: ::prost::alloc::string::String,
-    #[prost(string, tag = "7")]
-    pub raw_message: ::prost::alloc::string::String,
-    #[prost(string, tag = "8")]
-    pub signature: ::prost::alloc::string::String,
+    #[prost(bytes = "vec", tag = "7")]
+    pub raw_message: ::prost::alloc::vec::Vec<u8>,
+    #[prost(bytes = "vec", tag = "8")]
+    pub signature: ::prost::alloc::vec::Vec<u8>,
 }
