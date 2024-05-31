@@ -139,13 +139,15 @@ impl P2PNode {
         for x in &zmessages {
             let version: Option<i32> = Some(x.version as i32);
 
+            let data = business::ZChat::decode(&*x.data.clone()).unwrap().message_data;
+
             let new_message = z_messages::ActiveModel {
                 id: NotSet,
                 message_id: ActiveValue::Set(hex::encode(x.id.clone())),
                 version: ActiveValue::Set(version),
                 r#type: ActiveValue::Set(x.r#type.try_into().unwrap()),
                 public_key: ActiveValue::Set(Option::from(hex::encode(x.public_key.clone()))),
-                data: ActiveValue::Set(x.data.clone()),
+                data: ActiveValue::Set(data.clone()),
                 signature: ActiveValue::Set(Option::from(x.signature.clone())),
                 from: ActiveValue::Set(hex::encode(&*x.from)),
                 to: ActiveValue::Set(hex::encode(&*x.to)),
