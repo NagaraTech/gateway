@@ -93,7 +93,6 @@ impl P2PNode {
 
         let data = self.query_data(client.clone(), business::GatewayType::ClockNode as i32, clock_nodes_max_id).await;
         let clock_nodes = business::ClockInfos::decode(&*data).unwrap().clock_infos;
-        println!("{:?}", data);
         for x in &clock_nodes {
             let clock_json = serde_json::to_string(&x.clock.clone().unwrap().values).expect("Failed to serialize HashMap");
             let timestamp_secs = x.create_at / 1000;
@@ -144,7 +143,7 @@ impl P2PNode {
                 version: ActiveValue::Set(version),
                 r#type: ActiveValue::Set(x.r#type.try_into().unwrap()),
                 public_key: ActiveValue::Set(Option::from(hex::encode(x.public_key.clone()))),
-                data: ActiveValue::Set(data.clone()),
+                data: ActiveValue::Set(x.data.clone()),
                 signature: ActiveValue::Set(Option::from(x.signature.clone())),
                 from: ActiveValue::Set(hex::encode(&*x.from)),
                 to: ActiveValue::Set(hex::encode(&*x.to)),
