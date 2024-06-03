@@ -25,6 +25,20 @@ impl MigrationTrait for Migration {
                             .not_null()
                             .default(false),
                     )
+                    .col(ColumnDef::new(NodeInfo::RPCDomain).char_len(64).not_null())
+                    .col(
+                        ColumnDef::new(NodeInfo::RPCPort)
+                            .integer()
+                            .not_null()
+                            .default(0)
+                    )
+                    .col(ColumnDef::new(NodeInfo::WSDomain).char_len(64).not_null())
+                    .col(
+                        ColumnDef::new(NodeInfo::WSPort)
+                            .integer()
+                            .not_null()
+                            .default(0)
+                    )
                     .col(
                         ColumnDef::new(NodeInfo::ClockInfoIndex)
                             .integer()
@@ -62,6 +76,10 @@ enum NodeInfo {
     NodeId,
     NeighborNodes,
     IsAlive,
+    RPCDomain,
+    RPCPort,
+    WSDomain,
+    WSPort,
     ClockInfoIndex,
     MergeLogIndex,
     ZMessageIndex,

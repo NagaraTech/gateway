@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use gateway::db::connection::get_conn;
-// use gateway::entities::node_info;
 use gateway::restful::response::{MessageDetailResponse, MessageInfo, Node, NodeDetailResponse, NodesOverviewResponse};
 use axum::{
     routing::{get},
@@ -28,6 +27,10 @@ async fn get_nodes_info() -> Result<Json<NodesOverviewResponse>, StatusCode> {
             node_id: n.node_id.clone(),
             neighbor_nodes,
             is_alive: n.is_alive.clone(),
+            rpc_domain: n.rpc_domain.clone(),
+            rpc_port: n.rpc_port as u32,
+            ws_domain: n.ws_domain.clone(),
+            ws_port: n.ws_port as u32,
         })
     }
     let res = NodesOverviewResponse {
@@ -128,8 +131,8 @@ async fn get_merge_log_by_message_id(Path(id): Path<String>) -> Result<Json<serd
 
     let result = serde_json::json!(
       {
-          "start_merge_logs_query": start_merge_logs_query,
-          "end_merge_logs_query": end_merge_logs_query,
+          "start_merge_logs_query": &start_merge_logs_query,
+          "end_merge_logs_query": &end_merge_logs_query,
       }
     );
 

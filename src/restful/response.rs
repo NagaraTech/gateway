@@ -9,6 +9,14 @@ pub struct Node {
     pub neighbor_nodes: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
     #[prost(bool, tag = "3")]
     pub is_alive: bool,
+    #[prost(string, tag = "4")]
+    pub rpc_domain: ::prost::alloc::string::String,
+    #[prost(uint32, tag = "5")]
+    pub rpc_port: u32,
+    #[prost(string, tag = "6")]
+    pub ws_domain: ::prost::alloc::string::String,
+    #[prost(uint32, tag = "7")]
+    pub ws_port: u32,
 }
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Clone, PartialEq, ::prost::Message,Serialize, Deserialize)]
@@ -59,17 +67,17 @@ pub struct MessageId {
 pub struct MessageDetailResponse {
     #[prost(string, tag = "1")]
     pub message_id: ::prost::alloc::string::String,
-    #[prost(string, tag = "2")]
-    pub from_addr: ::prost::alloc::string::String,
     #[prost(string, tag = "3")]
+    pub from_addr: ::prost::alloc::string::String,
+    #[prost(string, tag = "4")]
     pub to_addr: ::prost::alloc::string::String,
-    #[prost(string, repeated, tag = "4")]
+    #[prost(string, repeated, tag = "5")]
     pub clock_json_str_list: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
-    #[prost(enumeration = "ZType", tag = "5")]
+    #[prost(enumeration = "ZType", tag = "6")]
     pub message_type: i32,
-    #[prost(bytes = "vec", tag = "6")]
-    pub message_data: ::prost::alloc::vec::Vec<u8>,
     #[prost(bytes = "vec", tag = "7")]
+    pub message_data: ::prost::alloc::vec::Vec<u8>,
+    #[prost(bytes = "vec", tag = "8")]
     pub signature: ::prost::alloc::vec::Vec<u8>,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration,Serialize, Deserialize)]

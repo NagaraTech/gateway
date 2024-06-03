@@ -271,10 +271,13 @@ impl P2PNode {
         } else {
             let new_node_info = node_info::ActiveModel {
                 id: NotSet,
-                node_id: Set(self.id.to_string()),
-                // neighbor_nodes: Set(neighbor_nodes),
-                neighbor_nodes: Set(serde_json::to_string(&neighbor_nodes).unwrap().to_string()),
-                is_alive: Set(is_alive),
+                node_id: ActiveValue::Set(self.id.to_string()),
+                neighbor_nodes: ActiveValue::Set(serde_json::to_string(&neighbor_nodes).unwrap().to_string()),
+                is_alive: ActiveValue::Set(is_alive),
+                rpc_domain: ActiveValue::Set(self.rpc_domain.to_string()),
+                rpc_port: ActiveValue::Set(self.rpc_port as i32),
+                ws_domain: ActiveValue::Set(self.ws_domain.to_string()),
+                ws_port:ActiveValue::Set(self.ws_port as i32),
                 clock_info_index: NotSet,
                 merge_log_index: NotSet,
                 z_message_index: NotSet,

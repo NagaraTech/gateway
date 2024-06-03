@@ -2,7 +2,7 @@
 pub mod restful;
 pub use restful::*;
 pub mod db;
-pub mod entities;
+
 
 pub mod nodes;
 

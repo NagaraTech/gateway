@@ -21,6 +21,10 @@ message Node {
     string node_id = 1;
     repeated string neighbor_nodes = 2;
     bool is_alive = 3;
+    string rpc_domain =4;
+    uint32 rpc_port =5;
+    string ws_domain =6;
+    uint32 ws_port =7;
 }
 
 message NodesOverviewResponse {
@@ -62,11 +66,10 @@ enum ZType {
 
 message MessageDetailResponse {
     string message_id = 1;
-    map<string ,int32 > clock = 2;
-    string from_addr = 3;
-    string to_addr = 4;
-    repeated string clock_json_str_list =5;
-    ZType message_type = 6;
-    bytes message_data = 7;
-    bytes signature = 8;
+    string from_addr = 2;
+    string to_addr = 3;
+    repeated string clock_json_str_list =4;
+    ZType message_type = 5;
+    bytes message_data = 6;
+    bytes signature = 7;
 }
