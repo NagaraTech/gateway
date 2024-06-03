@@ -100,6 +100,7 @@ async fn get_message_by_id(Path(id): Path<String>) -> Result<Json<MessageDetailR
         let mut clock_map:HashMap<String,String> = HashMap::new();
         clock_map.insert("NodeId".parse().unwrap(), clock_info.node_id);
         clock_map.insert("Clock".parse().unwrap(), clock_content_json_string);
+        clock_map.insert("ClockHash".parse().unwrap(), clock_info.clock_hash);
         let json_string = serde_json::to_string(&clock_map).unwrap();
         clock_json_str_list.push(json_string);
     }
