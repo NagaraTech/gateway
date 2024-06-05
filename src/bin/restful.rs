@@ -130,10 +130,10 @@ async fn get_merge_log_by_message_id(Path(id): Path<String>) -> Result<Json<serd
     let mut end_merge_logs_query: Vec<merge_logs::Model> = merge_logs::Entity::find().filter(merge_logs::Column::EClockHash.eq(node_clock_info_query.clock_hash.clone())).all(conn).await.expect("Fail to query");
 
 
-    let result_query = start_merge_logs_query.append(&mut end_merge_logs_query);
+    start_merge_logs_query.append(&mut end_merge_logs_query);
     let result = serde_json::json!(
       {
-          "merge_logs": &result_query,
+          "merge_logs": &start_merge_logs_query,
       }
     );
 
