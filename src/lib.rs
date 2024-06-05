@@ -1,12 +1,7 @@
-
 pub mod restful;
 pub use restful::*;
 pub mod db;
-
-
 pub mod nodes;
-
-
 
 pub mod business {
     include!(concat!(env!("OUT_DIR"), "/bussiness.rs"));

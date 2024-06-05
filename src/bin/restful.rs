@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use gateway::db::connection::get_conn;
-use gateway::restful::response::{MessageDetailResponse, MessageInfo, Node, NodeDetailResponse, NodesOverviewResponse};
+use gateway::restful::response::{MessageDetailResponse, MessageInfo, Node, NodeDetailResponse, NodesOverviewResponse,MessageClock};
 use axum::{
     routing::{get},
     http::StatusCode,
@@ -93,23 +93,22 @@ async fn get_message_by_id(Path(id): Path<String>) -> Result<Json<MessageDetailR
 
     let node_clock_infos_query: Vec<clock_infos::Model> = clock_infos::Entity::find().filter(clock_infos::Column::MessageId.eq(id.clone())).all(conn).await.expect("Fail to query");
 
-    let mut clock_json_str_list = Vec::new();
+
+    let mut clock_list = Vec::new();
     for clock_info in node_clock_infos_query {
         let clock_content: HashMap<String, i32> = serde_json::from_str(&*clock_info.clock).unwrap();
-        let clock_content_json_string = serde_json::to_string(&clock_content).unwrap();
-        let mut clock_map:HashMap<String,String> = HashMap::new();
-        clock_map.insert("NodeId".parse().unwrap(), clock_info.node_id);
-        clock_map.insert("Clock".parse().unwrap(), clock_content_json_string);
-        clock_map.insert("ClockHash".parse().unwrap(), clock_info.clock_hash);
-        let json_string = serde_json::to_string(&clock_map).unwrap();
-        clock_json_str_list.push(json_string);
+        clock_list.push(MessageClock{
+            node_id: clock_info.node_id,
+            clock: clock_content,
+            clock_hash: clock_info.clock_hash,
+        })
     }
 
     let res = MessageDetailResponse {
         message_id: message.message_id.clone(),
         from_addr: message.from.clone(),
         to_addr: message.to.clone(),
-        clock_json_str_list,
+        clock_list,
         message_type: message.r#type,
         signature: message.signature.unwrap(),
         message_data: message.data,
@@ -127,13 +126,14 @@ async fn get_merge_log_by_message_id(Path(id): Path<String>) -> Result<Json<serd
     }
 
     let node_clock_info_query = clock_infos::Entity::find().filter(clock_infos::Column::MessageId.eq(id.clone())).one(conn).await.expect("Fail to query").unwrap();
-    let start_merge_logs_query: Vec<merge_logs::Model> = merge_logs::Entity::find().filter(merge_logs::Column::SClockHash.eq(node_clock_info_query.clock_hash.clone())).all(conn).await.expect("Fail to query");
-    let end_merge_logs_query: Vec<merge_logs::Model> = merge_logs::Entity::find().filter(merge_logs::Column::EClockHash.eq(node_clock_info_query.clock_hash.clone())).all(conn).await.expect("Fail to query");
+    let mut start_merge_logs_query: Vec<merge_logs::Model> = merge_logs::Entity::find().filter(merge_logs::Column::SClockHash.eq(node_clock_info_query.clock_hash.clone())).all(conn).await.expect("Fail to query");
+    let mut end_merge_logs_query: Vec<merge_logs::Model> = merge_logs::Entity::find().filter(merge_logs::Column::EClockHash.eq(node_clock_info_query.clock_hash.clone())).all(conn).await.expect("Fail to query");
 
+
+    let result_query = start_merge_logs_query.append(&mut end_merge_logs_query);
     let result = serde_json::json!(
       {
-          "start_merge_logs_query": &start_merge_logs_query,
-          "end_merge_logs_query": &end_merge_logs_query,
+          "merge_logs": &result_query,
       }
     );
 
